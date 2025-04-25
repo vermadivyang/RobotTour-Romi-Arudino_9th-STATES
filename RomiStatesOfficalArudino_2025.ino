@@ -1,13 +1,19 @@
-//  ---------------------------------------- TO DO ----------------------------------------  //
-
-/*
- *Check Timing with the Delay (for non-jerk)
- *Check the addition of LL & RR
- *Test Backwards Motion
- *Add weight to one side of the robot to stop jerk
- *Test everything with new batteries, prepare scripts for all 3 samples
+/*DIVYANG VERMA - 2025 - SCIENCE OLYMPIAD ROBOT TOUR (SORT)
+ *This program is set to run with a Romi with a 32U4 board.
+ *This file is the main programing file, as you will set the path here.
+ *If using this code, make sure you change/adjust the following:
+  *NIGHTY_LEFT_TURN_COUNT & NIGHTY_RIGHT_TURN_COUNT
+  *AdjustmentDistance
+  *PoleToCenterDistance
+  *chassis(x,y,z) & chassis.setMotorPIDcoeffs(x, y)
+ *In compition, change the following:
+  *Target Time
+  *endDist & startDist
+  *moves[]
+  *AdjustmentTime --If the time is 61 sec and it runs to 61.31 sec, change to 0.14 (Accually its better to be under than over since the peoples reaction time is slow)
+  *If above doesn't work, then Non Jerk
+ *Used April 26, Michigan State Science Olypiad Compition
 */
-
 
 
 //   ------------------------------   IMPORTANT LIBARIES   ------------------------------   //
@@ -18,18 +24,19 @@
 //   ------------------------------   IMPORTANT VARIBLES   ------------------------------   //
 
 // encoder count targets, tune by turning 16 times and changing numbers untill offset is 0
-#define NIGHTY_LEFT_TURN_COUNT -725
-#define NIGHTY_RIGHT_TURN_COUNT 710
+#define NIGHTY_LEFT_TURN_COUNT -727.2 //-723.7
+#define NIGHTY_RIGHT_TURN_COUNT 712.3//711.3
 
-//Adjust the distance with these values (defualt: 50 - AdjustmentDistance)
-#define AdjustmentDistance 0.3
+//Adjust the distance with these values
+#define AdjustmentDistance 1.0046
+#define AdjustmentTime 0 // 55.3 to 59.1 for -3.1 || 63 = perfect
+#define AdjustmentPoleToCenterDistanceS 10.16
+#define AdjustmentPoleToCenterDistanceE 6.02
 
 // The time the robot waits after a function so the robot doesn't jerk
 #define NonJerk 200 
 #define NonJerk 200 
 
-//10.16 is the radius of the robot, so the robot travles in the center until the end --(for endDist and startDist)
-#define PoleToCenterDistance 10.16
 
 
 //   ------------------------------   HOW TO CODE   ------------------------------   //
@@ -37,21 +44,32 @@
 // F and B go forward/backwards 50 cm by default, but other distances can be easily specified by adding a number after the letter
 // S and E go the start/end distance
 // L and R are left and right
+// If you don't use E to end, use T (T ends the timer on the Serial Monitor)
 // targetTime is target time (duh)
-// Also change the min speed in the Chassis.cpp by the following equation: y = mx + b    | 15.3 cm per sec is the min  |
+// Also never change the min speed in the Chassis.cpp by the following equation: y = mx + b    | 15.3 cm per sec was the min  |
+//Example: char moves[200] ="S R F L F150 R R F100 R F150 R F L F L F100 R R F150 R F100 E T"; // S = 25, E = 50
+//Example: char moves[200] ="S R F F L F R F L F F L F F L F R F L F L F R F F L F F R R F F R F R F L F R F L F L E T"; // S = 75, E = 50
+//Example: char moves[200] ="S L F100 R R F200 L F100 L F100 L F R F R F100 R F L L F100 L E";
 
 //   ------------------------------   CHANGE THE FOLLOWING   ------------------------------   //
 
-char moves[200] ="S L F100 R R F200 L F100 L F100 L F R F R F100 R F L L F100 L E";
-double targetTime = 81;
-double endDist = 100 - PoleToCenterDistance;
-double startDist = 25 + PoleToCenterDistance;
+//char moves[200] ="F T";
+char moves[200] ="S R F F L F R F L F F L F F L F R F L F L F R F F L F F R R F F R F R F L F R F L F L E T";
+double TtargetTime = 63;
+double TstartDist = 75;
+double TendDist = 50;
+
+//   ------------------------------   ADJUSTMENTS   ------------------------------   //
+
+double targetTime = TtargetTime - AdjustmentTime;
+double endDist = TendDist - AdjustmentPoleToCenterDistanceE;
+double startDist = TstartDist + AdjustmentPoleToCenterDistanceS;
 
 //   ------------------------------   CONFIG THE HARDWARE   ------------------------------   //
 
 // Parameters are wheel diam, encoder counts, wheel track (tune these to your own hardware)*
 // *Default values of 7, 1440, 14 can't go wrong
-Chassis chassis(6.994936972, 1440, 14.0081);
+Chassis chassis(7.06, 1440, 14.1287);
 
 //Define Buttons
 Romi32U4ButtonA buttonA;
@@ -71,8 +89,6 @@ ROBOT_STATE robotState = ROBOT_IDLE;
 // a helper function to stop the motors
 void idle(void) {
   Serial.println("idle()");
-printBatteryVoltage();
-  Serial.println("idle()");
   chassis.idle();
   robotState = ROBOT_IDLE;
 }
@@ -87,6 +103,8 @@ void printBatteryVoltage() {
   Serial.println(voltage);  // Print the voltage
   Serial.println(" V");
 }
+
+float StartingTimer = 0;
 
 
 /*
@@ -109,7 +127,7 @@ void setup() {
   // these can be undone for the student to adjust
   // tuned like shit, very good numbers to change
   // it's actually a PI controller where first number is P and second is I
-  chassis.setMotorPIDcoeffs(5, 0.5);
+  chassis.setMotorPIDcoeffs(4.5, 0.45);
 }
 
 
@@ -128,6 +146,7 @@ void left(float seconds) {
 void loop() {
   //Button A = Start Button
   if (buttonA.getSingleDebouncedPress()) {
+    StartingTimer = millis();
     delay(500); // wait a little before starting to move so it doesn't hit the pencil or smth idk
     robotState = ROBOT_MOVE;
   }
@@ -176,11 +195,11 @@ void loop() {
       currentChar = *movesList[i];
       st = movesList[i];
       if (currentChar == 'R' || currentChar == 'L') {
-        numTurns++;
-      }
-      if (currentChar == 'RR' || currentChar == 'LL') {
-        numTurns++;
-        numTurns++;
+        if (st.length() > 1) {
+          numTurns += st.substring(1).toDouble();
+        } else {
+          numTurns++;
+        }
       }
       else if (currentChar == 'F' || currentChar == 'B') {   
         numDrive++;
@@ -201,10 +220,11 @@ void loop() {
     //   ------------------------------   CALCULATED (time) VARIBLES   ------------------------------   //
 
     double turnTime = 0.6; // target time for a turn is 0.55 seconds
-    double totalTurnTime = (turnTime + 0.1 + (NonJerk/1000)) * numTurns; // but the code doesn't work so add 0.1, plus the turnTime and the Wait time for non-jerks
-    double totalDriveWaitTime = numDrive * 0.2; // Every time the robot actions, there is a 200 millisecond wait, hence ...
-    double totalDriveTime = targetTime - totalTurnTime - totalDriveWaitTime - (0.00297)*totalDist; // this also always went over hence the 0.0029*totalDist
+    double totalTurnTime = (turnTime + 0.333 + (NonJerk/1000)) * numTurns; // but the code doesn't work so add 0.333, plus the turnTime and the Wait time for non-jerks
+    double totalDriveWaitTime = (numDrive - 1) * (NonJerk/1000); // Every time the robot actions, there is a 200 millisecond wait, hence ...
+    double totalDriveTime = targetTime - totalTurnTime - totalDriveWaitTime - (0.0035)*totalDist - 0.5; // this also always went over hence the 0.00297*totalDist
     double dist;
+    double turn;
 
   Serial.println(totalDist);  // Print the distance
 
@@ -219,37 +239,33 @@ void loop() {
       //Efficient Switch Case Thingy (based on previous comment)
       switch (currentChar) {
         case 'R':
-          right(turnTime);
+          if (st.length() > 1) {turn = (st.substring(1).toDouble());} 
+          else {turn = 1;}
+          for(int n = 0; n < turn; n++){
+            right(turnTime);
+          }
           delay(NonJerk); // Non-Jerk Delay
           break;
 
         case 'L':
-          left(turnTime);
-          delay(NonJerk); // Non-Jerk Delay
-          break;
-
-        case 'LL':
-          left(turnTime);
-          left(turnTime);
-          delay(NonJerk); // Non-Jerk Delay
-          break;
-
-        case 'RR':
-          right(turnTime);
-          right(turnTime);
+          if (st.length() > 1) {turn = (st.substring(1).toDouble());} 
+          else {turn = 1;}
+          for(int n = 0; n < turn; n++){
+            left(turnTime);
+          }
           delay(NonJerk); // Non-Jerk Delay
           break;
 
         case 'B':
-          if (st.length() > 1) {dist = ( st.substring(1).toDouble() ) - AdjustmentDistance;} 
-          else {dist = 50 - AdjustmentDistance;}
+          if (st.length() > 1) {dist = ( st.substring(1).toDouble() ) * AdjustmentDistance;} 
+          else {dist = 50 * AdjustmentDistance;}
           chassis.driveWithTime(0-dist, dist/totalDist * totalDriveTime);
           delay(NonJerk); // Non-Jerk Delay
           break;
 
         case 'F':
-          if (st.length() > 1) {dist = ( st.substring(1).toDouble() ) - AdjustmentDistance;} 
-          else {dist = 50 - AdjustmentDistance;}
+          if (st.length() > 1) {dist = ( st.substring(1).toDouble() ) * AdjustmentDistance;} 
+          else {dist = 50 * AdjustmentDistance;}
           chassis.driveWithTime(dist, dist/totalDist * totalDriveTime);
           delay(NonJerk); // Non-Jerk Delay
           break;
@@ -261,11 +277,20 @@ void loop() {
 
         case 'E':
           chassis.driveWithTime(endDist, abs(endDist)/totalDist * totalDriveTime);
-          delay(NonJerk); // Non-Jerk Delay
+          delay(NonJerk);
+          break;
+
+        case 'T':
+          float EndingTimer = millis(); //End Timer to see if seconds are good.
+          float FinalTiming = EndingTimer - StartingTimer;
+          Serial.println("Final Run Time: ");
+          Serial.println(FinalTiming/1000);
+          Serial.println("Seconds");
           break;
 
       }
     }
     idle(); // go back to idling after finish
   }
+
 }
